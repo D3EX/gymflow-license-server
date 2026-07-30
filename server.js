@@ -27,12 +27,22 @@ const requests = new Map();
 // ==========================================
 function sendEmailViaBrevo(to, subject, htmlContent) {
     return new Promise((resolve, reject) => {
-        const data = JSON.stringify({
-            sender: { email: BREVO_SENDER_EMAIL, name: BREVO_SENDER_NAME },
-            to: [{ email: to }],
+        // Sanitize the HTML content - remove extra whitespace and newlines
+        const cleanHtml = htmlContent.replace(/\s+/g, ' ').trim();
+        
+        const emailData = {
+            sender: { 
+                email: BREVO_SENDER_EMAIL, 
+                name: BREVO_SENDER_NAME 
+            },
+            to: [{ 
+                email: to 
+            }],
             subject: subject,
-            htmlContent: htmlContent
-        });
+            htmlContent: cleanHtml
+        };
+
+        const data = JSON.stringify(emailData);
 
         const options = {
             hostname: 'api.brevo.com',
@@ -46,19 +56,30 @@ function sendEmailViaBrevo(to, subject, htmlContent) {
             }
         };
 
+        console.log(`📧 Sending email to ${to}`);
+        console.log(`📝 Subject: ${subject}`);
+        console.log(`📦 Data length: ${data.length} bytes`);
+
         const req = https.request(options, (res) => {
             let responseData = '';
             res.on('data', (chunk) => responseData += chunk);
             res.on('end', () => {
                 if (res.statusCode >= 200 && res.statusCode < 300) {
+                    console.log(`✅ Email sent successfully to ${to}`);
                     resolve(responseData);
                 } else {
+                    console.error(`❌ Brevo API error: ${res.statusCode}`);
+                    console.error(`📄 Response: ${responseData}`);
                     reject(new Error(`Brevo API error: ${res.statusCode} - ${responseData}`));
                 }
             });
         });
 
-        req.on('error', (error) => reject(error));
+        req.on('error', (error) => {
+            console.error(`❌ Request error: ${error.message}`);
+            reject(error);
+        });
+
         req.write(data);
         req.end();
     });
@@ -71,21 +92,27 @@ async function sendAdminApprovalEmail(email, fingerprint, token) {
     const approveUrl = `https://gymflow-license-server.onrender.com/approve/${token}`;
     const denyUrl = `https://gymflow-license-server.onrender.com/deny/${token}`;
 
+    // Use single-line HTML to avoid JSON parsing issues
     const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #FF8C00;">GymFlow Admin Activation Request</h2>
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+            <h2 style="color:#FF8C00;">GymFlow Admin Activation Request</h2>
             <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Device Fingerprint:</strong> <code style="background: #f4f4f4; padding: 4px 8px; border-radius: 4px;">${fingerprint}</code></p>
-            <p style="margin-top: 24px;">Click one of the buttons below to approve or deny this request:</p>
-            <div style="margin: 32px 0; text-align: center;">
-                <a href="${approveUrl}" style="background: #28a745; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-right: 12px; display: inline-block;">✅ Approve</a>
-                <a href="${denyUrl}" style="background: #dc3545; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">❌ Deny</a>
+            <p><strong>Device Fingerprint:</strong> <code style="background:#f4f4f4;padding:4px 8px;border-radius:4px;">${fingerprint}</code></p>
+            <p style="margin-top:24px;">Click one of the buttons below to approve or deny this request:</p>
+            <div style="margin:32px 0;text-align:center;">
+                <a href="${approveUrl}" style="background:#28a745;color:white;padding:12px 32px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px;display:inline-block;">✅ Approve</a>
+                <a href="${denyUrl}" style="background:#dc3545;color:white;padding:12px 32px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">❌ Deny</a>
             </div>
-            <p style="color: #666; font-size: 12px; margin-top: 24px;">This request will expire in 24 hours.</p>
+            <p style="color:#666;font-size:12px;margin-top:24px;">This request will expire in 24 hours.</p>
         </div>
     `;
 
-    await sendEmailViaBrevo(ADMIN_EMAIL, `🔐 New activation request from ${email}`, html);
+    console.log(`📧 Sending admin approval email for ${email}`);
+    await sendEmailViaBrevo(
+        ADMIN_EMAIL, 
+        `🔐 New activation request from ${email}`, 
+        html
+    );
     console.log(`✅ Admin approval email sent for ${email}`);
 }
 
@@ -96,20 +123,21 @@ async function sendUserNotification(email, status) {
     
     const html = status === 'approved'
         ? `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #28a745;">✅ Activation Approved!</h2>
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+                <h2 style="color:#28a745;">✅ Activation Approved!</h2>
                 <p>Your GymFlow Admin device has been activated successfully.</p>
                 <p>Open the app and you're ready to go.</p>
             </div>
         `
         : `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #dc3545;">❌ Activation Denied</h2>
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+                <h2 style="color:#dc3545;">❌ Activation Denied</h2>
                 <p>Your activation request was denied by the gym admin.</p>
                 <p>If you believe this is a mistake, please contact your gym administrator.</p>
             </div>
         `;
 
+    console.log(`📧 Sending user notification to ${email} (${status})`);
     await sendEmailViaBrevo(email, subject, html);
     console.log(`✅ User notification sent to ${email} (${status})`);
 }
@@ -209,11 +237,11 @@ app.get('/approve/:token', async (req, res) => {
     }
 
     res.send(`
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; text-align: center; padding: 20px; border-radius: 8px; background: #f8f9fa;">
-            <h1 style="color: #28a745;">✅ Approved!</h1>
-            <p style="font-size: 18px;">You have approved the activation for <strong>${request.email}</strong></p>
-            <p style="color: #666;">The user will be notified and the app will unlock automatically.</p>
-            <p style="font-size: 12px; color: #999; margin-top: 32px;">You can close this window now.</p>
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:40px auto;text-align:center;padding:20px;border-radius:8px;background:#f8f9fa;">
+            <h1 style="color:#28a745;">✅ Approved!</h1>
+            <p style="font-size:18px;">You have approved the activation for <strong>${request.email}</strong></p>
+            <p style="color:#666;">The user will be notified and the app will unlock automatically.</p>
+            <p style="font-size:12px;color:#999;margin-top:32px;">You can close this window now.</p>
         </div>
     `);
 });
@@ -235,11 +263,11 @@ app.get('/deny/:token', async (req, res) => {
     await sendUserNotification(request.email, 'denied');
     
     res.send(`
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; text-align: center; padding: 20px; border-radius: 8px; background: #f8f9fa;">
-            <h1 style="color: #dc3545;">❌ Denied</h1>
-            <p style="font-size: 18px;">You have denied the activation for <strong>${request.email}</strong></p>
-            <p style="color: #666;">The user will be notified.</p>
-            <p style="font-size: 12px; color: #999; margin-top: 32px;">You can close this window now.</p>
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:40px auto;text-align:center;padding:20px;border-radius:8px;background:#f8f9fa;">
+            <h1 style="color:#dc3545;">❌ Denied</h1>
+            <p style="font-size:18px;">You have denied the activation for <strong>${request.email}</strong></p>
+            <p style="color:#666;">The user will be notified.</p>
+            <p style="font-size:12px;color:#999;margin-top:32px;">You can close this window now.</p>
         </div>
     `);
 });
