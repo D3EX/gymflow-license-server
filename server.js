@@ -23,11 +23,10 @@ ZSXVbpw3TH39S5DqQVCnCR7gEfChRANCAAQcfwRdHHYXeIvoHbnz2ZiJX4xYZ59P
 const requests = new Map();
 
 // ==========================================
-// EMAIL SENDING - SIMPLE AND TESTED
+// EMAIL SENDING
 // ==========================================
 function sendEmailViaBrevo(to, subject, htmlContent) {
     return new Promise((resolve, reject) => {
-        // Build the email data as a clean JSON object
         const emailData = {
             sender: {
                 email: BREVO_SENDER_EMAIL,
@@ -40,10 +39,7 @@ function sendEmailViaBrevo(to, subject, htmlContent) {
             htmlContent: htmlContent
         };
 
-        // Convert to JSON string
         const data = JSON.stringify(emailData);
-        
-        console.log('📦 Sending JSON:', data.substring(0, 200) + '...');
 
         const options = {
             hostname: 'api.brevo.com',
@@ -62,71 +58,105 @@ function sendEmailViaBrevo(to, subject, htmlContent) {
             res.on('data', (chunk) => responseData += chunk);
             res.on('end', () => {
                 if (res.statusCode >= 200 && res.statusCode < 300) {
-                    console.log(`✅ Email sent to ${to}`);
                     resolve(responseData);
                 } else {
-                    console.error(`❌ Brevo API error: ${res.statusCode}`);
-                    console.error(`📄 Response: ${responseData}`);
                     reject(new Error(`Brevo API error: ${res.statusCode} - ${responseData}`));
                 }
             });
         });
 
-        req.on('error', (error) => {
-            console.error(`❌ Request error: ${error.message}`);
-            reject(error);
-        });
-
+        req.on('error', (error) => reject(error));
         req.write(data);
         req.end();
     });
 }
 
 // ==========================================
-// EMAIL FUNCTIONS
+// PROFESSIONAL EMAIL TEMPLATES
 // ==========================================
+function getAdminApprovalEmail(email, fingerprint, approveUrl, denyUrl) {
+    return `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="background: #FF8C00; padding: 24px 32px;">
+                <h2 style="color: #ffffff; margin: 0; font-weight: 600; font-size: 20px; letter-spacing: 0.5px;">GymFlow Admin</h2>
+            </div>
+            <div style="padding: 32px 32px 24px;">
+                <h3 style="color: #1a1a1a; margin: 0 0 16px; font-size: 18px; font-weight: 600;">New Activation Request</h3>
+                
+                <div style="background: #f8f9fa; border-radius: 6px; padding: 16px; margin-bottom: 24px;">
+                    <p style="margin: 4px 0; color: #495057; font-size: 14px;">
+                        <strong style="color: #212529;">Email:</strong> ${email}
+                    </p>
+                    <p style="margin: 4px 0; color: #495057; font-size: 14px;">
+                        <strong style="color: #212529;">Device:</strong> <code style="background: #e9ecef; padding: 2px 8px; border-radius: 4px; font-size: 13px;">${fingerprint}</code>
+                    </p>
+                </div>
+                
+                <p style="color: #495057; font-size: 14px; margin-bottom: 24px;">Please review and respond to this activation request:</p>
+                
+                <div style="text-align: center; margin: 32px 0;">
+                    <a href="${approveUrl}" style="background: #28a745; color: #ffffff; padding: 12px 36px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block; margin-right: 12px;">Approve</a>
+                    <a href="${denyUrl}" style="background: #dc3545; color: #ffffff; padding: 12px 36px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">Decline</a>
+                </div>
+                
+                <p style="color: #868e96; font-size: 12px; text-align: center; margin: 24px 0 0;">This request will expire in 24 hours.</p>
+            </div>
+        </div>
+    `;
+}
+
+function getUserApprovedEmail() {
+    return `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="background: #28a745; padding: 24px 32px;">
+                <h2 style="color: #ffffff; margin: 0; font-weight: 600; font-size: 20px; letter-spacing: 0.5px;">GymFlow Admin</h2>
+            </div>
+            <div style="padding: 32px 32px 24px; text-align: center;">
+                <div style="background: #e8f5e9; border-radius: 50%; width: 64px; height: 64px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                    <span style="font-size: 32px;">✓</span>
+                </div>
+                <h3 style="color: #1a1a1a; margin: 0 0 12px; font-size: 18px; font-weight: 600;">Activation Approved</h3>
+                <p style="color: #495057; font-size: 14px; line-height: 1.6;">Your GymFlow Admin device has been successfully activated. You can now open the app and start using it.</p>
+            </div>
+        </div>
+    `;
+}
+
+function getUserDeniedEmail() {
+    return `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="background: #dc3545; padding: 24px 32px;">
+                <h2 style="color: #ffffff; margin: 0; font-weight: 600; font-size: 20px; letter-spacing: 0.5px;">GymFlow Admin</h2>
+            </div>
+            <div style="padding: 32px 32px 24px; text-align: center;">
+                <div style="background: #fbe9e7; border-radius: 50%; width: 64px; height: 64px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                    <span style="font-size: 32px;">✕</span>
+                </div>
+                <h3 style="color: #1a1a1a; margin: 0 0 12px; font-size: 18px; font-weight: 600;">Activation Declined</h3>
+                <p style="color: #495057; font-size: 14px; line-height: 1.6;">Your activation request has been declined. If you believe this is a mistake, please contact your gym administrator.</p>
+            </div>
+        </div>
+    `;
+}
+
 async function sendAdminApprovalEmail(email, fingerprint, token) {
     const approveUrl = `https://gymflow-license-server.onrender.com/approve/${token}`;
     const denyUrl = `https://gymflow-license-server.onrender.com/deny/${token}`;
-
-    // SIMPLE HTML - no multiline strings
-    const html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">' +
-        '<h2 style="color:#FF8C00;">GymFlow Admin Activation Request</h2>' +
-        '<p><strong>Email:</strong> ' + email + '</p>' +
-        '<p><strong>Device Fingerprint:</strong> <code style="background:#f4f4f4;padding:4px 8px;border-radius:4px;">' + fingerprint + '</code></p>' +
-        '<p style="margin-top:24px;">Click one of the buttons below to approve or deny this request:</p>' +
-        '<div style="margin:32px 0;text-align:center;">' +
-        '<a href="' + approveUrl + '" style="background:#28a745;color:white;padding:12px 32px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px;display:inline-block;">✅ Approve</a>' +
-        '<a href="' + denyUrl + '" style="background:#dc3545;color:white;padding:12px 32px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">❌ Deny</a>' +
-        '</div>' +
-        '<p style="color:#666;font-size:12px;margin-top:24px;">This request will expire in 24 hours.</p>' +
-        '</div>';
-
-    console.log(`📧 Sending admin approval email for ${email}`);
-    await sendEmailViaBrevo(ADMIN_EMAIL, `🔐 New activation request from ${email}`, html);
-    console.log(`✅ Admin approval email sent for ${email}`);
+    
+    const html = getAdminApprovalEmail(email, fingerprint, approveUrl, denyUrl);
+    await sendEmailViaBrevo(ADMIN_EMAIL, `New activation request from ${email}`, html);
 }
 
 async function sendUserNotification(email, status) {
     const subject = status === 'approved' 
-        ? '✅ Your GymFlow Admin activation was approved!' 
-        : '❌ Your GymFlow Admin activation was denied';
+        ? 'Your GymFlow Admin activation was approved' 
+        : 'Your GymFlow Admin activation was declined';
     
-    const html = status === 'approved'
-        ? '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">' +
-          '<h2 style="color:#28a745;">✅ Activation Approved!</h2>' +
-          '<p>Your GymFlow Admin device has been activated successfully.</p>' +
-          '<p>Open the app and you\'re ready to go.</p>' +
-          '</div>'
-        : '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">' +
-          '<h2 style="color:#dc3545;">❌ Activation Denied</h2>' +
-          '<p>Your activation request was denied by the gym admin.</p>' +
-          '<p>If you believe this is a mistake, please contact your gym administrator.</p>' +
-          '</div>';
+    const html = status === 'approved' 
+        ? getUserApprovedEmail() 
+        : getUserDeniedEmail();
 
-    console.log(`📧 Sending user notification to ${email} (${status})`);
     await sendEmailViaBrevo(email, subject, html);
-    console.log(`✅ User notification sent to ${email} (${status})`);
 }
 
 // ==========================================
@@ -143,7 +173,6 @@ function signLicenseCode(fingerprint) {
 // ENDPOINTS
 // ==========================================
 
-// 1. User requests activation
 app.post('/activate', async (req, res) => {
     const { fingerprint, email } = req.body;
 
@@ -156,7 +185,6 @@ app.post('/activate', async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid fingerprint format' });
     }
 
-    // Check for existing pending request
     for (const [token, request] of requests) {
         if (request.email === email && request.fingerprint === fingerprint && request.status === 'pending') {
             return res.json({ 
@@ -196,17 +224,26 @@ app.post('/activate', async (req, res) => {
     }
 });
 
-// 2. Admin approves
 app.get('/approve/:token', async (req, res) => {
     const { token } = req.params;
     
     const request = requests.get(token);
     if (!request) {
-        return res.status(404).send('<h2>❌ Request not found</h2><p>This activation request has expired or doesn\'t exist.</p>');
+        return res.status(404).send(`
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 40px; color: #495057;">
+                <h2 style="color: #dc3545;">Request Not Found</h2>
+                <p>This activation request has expired or does not exist.</p>
+            </div>
+        `);
     }
 
     if (request.status !== 'pending') {
-        return res.status(400).send('<h2>⚠️ Already ' + request.status + '</h2>');
+        return res.status(400).send(`
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 40px; color: #495057;">
+                <h2 style="color: #ffc107;">Already Processed</h2>
+                <p>This request was already ${request.status}.</p>
+            </div>
+        `);
     }
 
     const licenseCode = signLicenseCode(request.fingerprint);
@@ -215,7 +252,6 @@ app.get('/approve/:token', async (req, res) => {
     
     await sendUserNotification(request.email, 'approved');
     
-    // Clean up old requests (keep last 100)
     if (requests.size > 100) {
         const oldest = [...requests.entries()]
             .sort((a, b) => a[1].createdAt - b[1].createdAt)
@@ -223,43 +259,57 @@ app.get('/approve/:token', async (req, res) => {
         oldest.forEach(([key]) => requests.delete(key));
     }
 
-    res.send(
-        '<div style="font-family:Arial,sans-serif;max-width:600px;margin:40px auto;text-align:center;padding:20px;border-radius:8px;background:#f8f9fa;">' +
-        '<h1 style="color:#28a745;">✅ Approved!</h1>' +
-        '<p style="font-size:18px;">You have approved the activation for <strong>' + request.email + '</strong></p>' +
-        '<p style="color:#666;">The user will be notified and the app will unlock automatically.</p>' +
-        '<p style="font-size:12px;color:#999;margin-top:32px;">You can close this window now.</p>' +
-        '</div>'
-    );
+    res.send(`
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 40px auto; text-align: center; padding: 32px; border-radius: 8px; background: #f8f9fa;">
+            <div style="background: #e8f5e9; border-radius: 50%; width: 64px; height: 64px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                <span style="font-size: 32px; color: #28a745;">✓</span>
+            </div>
+            <h1 style="color: #28a745; margin: 0 0 8px; font-size: 24px;">Approved</h1>
+            <p style="font-size: 16px; color: #495057; margin: 0;">You have approved the activation for <strong>${request.email}</strong></p>
+            <p style="color: #868e96; font-size: 14px; margin-top: 16px;">The user will be notified and the app will unlock automatically.</p>
+            <p style="color: #868e96; font-size: 12px; margin-top: 32px;">You may close this window.</p>
+        </div>
+    `);
 });
 
-// 3. Admin denies
 app.get('/deny/:token', async (req, res) => {
     const { token } = req.params;
     
     const request = requests.get(token);
     if (!request) {
-        return res.status(404).send('<h2>❌ Request not found</h2><p>This activation request has expired or doesn\'t exist.</p>');
+        return res.status(404).send(`
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 40px; color: #495057;">
+                <h2 style="color: #dc3545;">Request Not Found</h2>
+                <p>This activation request has expired or does not exist.</p>
+            </div>
+        `);
     }
 
     if (request.status !== 'pending') {
-        return res.status(400).send('<h2>⚠️ Already ' + request.status + '</h2>');
+        return res.status(400).send(`
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 40px; color: #495057;">
+                <h2 style="color: #ffc107;">Already Processed</h2>
+                <p>This request was already ${request.status}.</p>
+            </div>
+        `);
     }
 
     request.status = 'denied';
     await sendUserNotification(request.email, 'denied');
     
-    res.send(
-        '<div style="font-family:Arial,sans-serif;max-width:600px;margin:40px auto;text-align:center;padding:20px;border-radius:8px;background:#f8f9fa;">' +
-        '<h1 style="color:#dc3545;">❌ Denied</h1>' +
-        '<p style="font-size:18px;">You have denied the activation for <strong>' + request.email + '</strong></p>' +
-        '<p style="color:#666;">The user will be notified.</p>' +
-        '<p style="font-size:12px;color:#999;margin-top:32px;">You can close this window now.</p>' +
-        '</div>'
-    );
+    res.send(`
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 40px auto; text-align: center; padding: 32px; border-radius: 8px; background: #f8f9fa;">
+            <div style="background: #fbe9e7; border-radius: 50%; width: 64px; height: 64px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                <span style="font-size: 32px; color: #dc3545;">✕</span>
+            </div>
+            <h1 style="color: #dc3545; margin: 0 0 8px; font-size: 24px;">Declined</h1>
+            <p style="font-size: 16px; color: #495057; margin: 0;">You have declined the activation for <strong>${request.email}</strong></p>
+            <p style="color: #868e96; font-size: 14px; margin-top: 16px;">The user will be notified.</p>
+            <p style="color: #868e96; font-size: 12px; margin-top: 32px;">You may close this window.</p>
+        </div>
+    `);
 });
 
-// 4. Poll status endpoint for the app
 app.post('/status', async (req, res) => {
     const { pollToken } = req.body;
     
@@ -282,9 +332,6 @@ app.post('/status', async (req, res) => {
     }
 });
 
-// ==========================================
-// START SERVER
-// ==========================================
 app.listen(PORT, () => {
     console.log(`🚀 GymFlow Admin License Server running on port ${PORT}`);
 });
