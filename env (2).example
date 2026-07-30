@@ -1,0 +1,21 @@
+PORT=3000
+
+# ---- Signing key: choose ONE of the two options below ----
+
+# Option A: path to a PEM file on the server's disk (kept outside git).
+PRIVATE_KEY_PATH=./private_key.pem
+
+# Option B: paste the PEM contents directly (for hosts with no file uploads,
+# e.g. Railway/Render env var UI). Replace real newlines with \n.
+# PRIVATE_KEY_PEM="-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49...\n-----END PRIVATE KEY-----\n"
+
+# ---- Outgoing email (SMTP) ----
+SMTP_HOST=smtp.your-provider.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=you@yourdomain.com
+SMTP_PASS=your-smtp-password-or-app-password
+
+FROM_EMAIL="GymFlow Admin <you@yourdomain.com>"
+# Optional: bcc yourself on every activation email so you keep visibility.
+ADMIN_EMAIL=you@yourdomain.com
