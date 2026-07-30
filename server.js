@@ -1,13 +1,16 @@
 require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 
 const app = express();
 app.use(express.json());
+
+// Render sits behind a proxy; this tells express-rate-limit to trust the
+// X-Forwarded-For header it sets, instead of logging a warning every request.
+app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
 
@@ -46,28 +49,38 @@ function signFingerprint(fingerprint) {
   return signer.sign(PRIVATE_KEY_PEM).toString('base64');
 }
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
+// ---- Outgoing email via Brevo's HTTP API ----
+// Render's free tier blocks outbound traffic on SMTP ports (25/465/587), so
+// we send mail over regular HTTPS instead, via Brevo's REST API. You still
+// send "from" your own verified email address — see BREVO_SENDER_EMAIL.
 async function sendLicenseEmail(toEmail, fingerprint, licenseCode) {
-  return transporter.sendMail({
-    from: process.env.FROM_EMAIL,
-    to: toEmail,
-    bcc: process.env.ADMIN_EMAIL || undefined, // so you still see every activation
-    subject: 'Your GymFlow Admin license code',
-    text:
-      `Thanks for activating GymFlow Admin!\n\n` +
-      `Device: ${fingerprint}\n` +
-      `License code:\n${licenseCode}\n\n` +
-      `Keep this email — you may need the code again if you ever reinstall the app.`,
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'api-key': process.env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: {
+        email: process.env.BREVO_SENDER_EMAIL,
+        name: process.env.BREVO_SENDER_NAME || 'GymFlow Admin',
+      },
+      to: [{ email: toEmail }],
+      bcc: process.env.ADMIN_EMAIL ? [{ email: process.env.ADMIN_EMAIL }] : undefined,
+      subject: 'Your GymFlow Admin license code',
+      textContent:
+        `Thanks for activating GymFlow Admin!\n\n` +
+        `Device: ${fingerprint}\n` +
+        `License code:\n${licenseCode}\n\n` +
+        `Keep this email — you may need the code again if you ever reinstall the app.`,
+    }),
   });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Brevo send failed: ${res.status} ${body}`);
+  }
 }
 
 // Basic abuse protection. There's no purchase gate on this endpoint (by
